@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>EtherPass front-end</title>
+    <script language="javascript" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script language="javascript" type="text/javascript" src="web3.min.js"></script>
+  </head>
+  <body>
+    <div id="txStatus"></div>
+    <div id="passwords"></div>
+
+    <script>
+      var etherPass;
+      var userAccount;
+
+      function startApp() {
+        var etherPassAddress = "YOUR_CONTRACT_ADDRESS";
+        etherPass = new web3js.eth.Contract(etherPassABI, etherPassAddress);
+
+        //etherPassABI is the i/o file of the compiled smart contract
+
+        var accountInterval = setInterval(function() {
+          // Check if account has changed
+          if (web3.eth.accounts[0] !== userAccount) {
+            userAccount = web3.eth.accounts[0];
+            // Call a function to update the UI with the new account
+            getPasswordsByOwner(userAccount)
+            .then(displayPasswords);
+          }
+        }, 100);
+
+        // Start here
+      }
+
+      function displayPasswords(ids) {
+        $("#passwords").empty();
+        for (id of ids) {
+          // Look up password details from our contract. Returns a `password` object
+          getPasswordDetails(id)
+          .then(function(password) {
+            // Using ES6's "template literals" to inject variables into the HTML.
+            // Append each one to our #passwords div
+            $("#passwords").append(`<div class="password">
+              <ul>
+                <li>Name: ${password.name}</li>
+                <li>DNA: ${password.dna}</li>
+                <li>Level: ${password.level}</li>
+                <li>Wins: ${password.winCount}</li>
+                <li>Losses: ${password.lossCount}</li>
+                <li>Ready Time: ${password.readyTime}</li>
+              </ul>
+            </div>`);
+          });
+        }
+      }
+
+      function createPassword(name) {
+        // This is going to take a while, so update the UI to let the user know
+        // the transaction has been sent
+        $("#txStatus").text("Creating new password on the blockchain. This may take a while...");
+        // Send the tx to our contract:
+        return etherPass.methods.createPassword(name)
+        .send({ from: userAccount })
+        .on("receipt", function(receipt) {
+          $("#txStatus").text("Successfully created " + name + "!");
+          // Transaction was accepted into the blockchain, let's redraw the UI
+          getPasswordsByOwner(userAccount).then(displayPasswords);
+        })
+        .on("error", function(error) {
+          // Do something to alert the user their transaction has failed
+          $("#txStatus").text(error);
+        });
+      }
+
+      function getpasswordDetails(id) {
+        return etherPass.methods.passwords(id).call()
+      }
+
+      function passwordToOwner(id) {
+        return etherPass.methods.passwordToOwner(id).call()
+      }
+
+      function getpasswordsByOwner(owner) {
+        return etherPass.methods.getpasswordsByOwner(owner).call()
+      }
+
+      window.addEventListener('load', function() {
+
+        // Checking if Web3 has been injected by the browser (Mist/MetaMask)
+        if (typeof web3 !== 'undefined') {
+          // Use Mist/MetaMask's provider
+          web3js = new Web3(web3.currentProvider);
+        } else {
+          // Handle the case where the user doesn't have Metamask installed
+          // Probably show them a message prompting them to install Metamask
+        }
+
+        // Now you can start your app & access web3 freely:
+        startApp()
+
+      })
+    </script>
+  </body>
+</html>
